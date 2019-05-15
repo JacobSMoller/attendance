@@ -17,7 +17,7 @@ type Sms struct {
 	WebhookLabel string `json:"webhook_label"`
 }
 
-func (s Sms) guessFromSms() (guess.Guess, error) {
+func (s Sms) GuessFromSms() (guess.Guess, error) {
 	split := strings.Split(s.Message, " ")
 	matchID := split[1]
 	// TODO verify that match id is valid.
