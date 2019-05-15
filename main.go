@@ -11,46 +11,9 @@ import (
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
+	"github.com/JacobSMoller/attendance/sms"
+	"github.com/JacobSMoller/attendance/guess"
 )
-
-// Sms struct to unmarshal inbound message json.
-type Sms struct {
-	ID           int64  `json:"id"`
-	Msisdn       int64  `json:"msisdn"`
-	Receiver     int64  `json:"receiver"`
-	Message      string `json:"message"`
-	Senttime     int    `json:"senttime"`
-	WebhookLabel string `json:"webhook_label"`
-}
-
-func (s Sms) guessFromSms() (Guess, error) {
-	split := strings.Split(s.Message, " ")
-	matchID := split[1]
-	// TODO verify that match id is valid.
-	attendanceStr := split[2]
-	attendance, err := strconv.ParseInt(attendanceStr, 10, 64)
-	if err != nil {
-		return Guess{}, err
-	}
-	guess := Guess{
-		UserMsisdn: s.Msisdn,
-		Total:      attendance,
-		MatchID:    matchID,
-	}
-	return guess, nil
-}
-
-func (g Guess) respondToGuess() {
-	response := fmt.Sprintf("Dit gæt på %d til kampen: %s er registret.", g.Total, g.MatchID)
-	fmt.Print(response)
-}
-
-// Guess will contain values gorm should write to database for a guess.
-type Guess struct {
-	Total      int64  `gorm:"total"`
-	UserMsisdn int64  `gorm:"user_msisdn"`
-	MatchID    string `gorm:"match_id"`
-}
 
 func handleSms(w http.ResponseWriter, r *http.Request) {
 	//conect to db
@@ -72,7 +35,7 @@ func handleSms(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Unmarshal json body to Sms.
-	var sms Sms
+	var sms sms.Sms
 	err = json.Unmarshal(b, &sms)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
