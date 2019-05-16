@@ -1,7 +1,10 @@
 package guess
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/jinzhu/gorm"
 )
@@ -13,17 +16,60 @@ type Guess struct {
 	MatchID    string `gorm:"match_id"`
 }
 
-// Sends sms
-func (g Guess) RespondToGuess() {
-	response := fmt.Sprintf("Dit gæt på %d til kampen: %s er registret.", g.Total, g.MatchID)
-	fmt.Println(response)
+type mtsms struct {
+	Message    string             `json:"message"`
+	Sender     string             `json:"sender"`
+	Recipients []map[string]int64 `json:"recipients"`
 }
 
-// GuessFromDB check if a guess already exists for match and user.
-func (g Guess) GuessExists(db *gorm.DB) error {
-	result := db.Table("guess").Where("user_msisdn = ? and match_id = ?", g.UserMsisdn, g.MatchID).First(&Guess{})
+func sendMtsms(message, key string, msisdn int64) error {
+	sms := mtsms{
+		Message: message,
+		Sender:  "Attendance",
+	}
+	sms.Recipients = []map[string]int64{
+		map[string]int64{
+			"msisdn": msisdn,
+		},
+	}
+	jsonSms, err := json.Marshal(sms)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest("POST", "https://gatewayapi.com/rest/mtsms", bytes.NewBuffer(jsonSms))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth(key, "")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Non 200 (%q) code received from GatewayAPI", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+	return nil
+
+}
+
+// RespondToGuess sends a response to the msisdn of the guess, stating that guess is received.
+func (g Guess) RespondToGuess(key string) error {
+	message := fmt.Sprintf("Dit gæt på %d til kampen: %s er registreret.", g.Total, g.MatchID)
+	err := sendMtsms(message, key, g.UserMsisdn)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GuessExists check if a guess already exists for match and user.
+func (g Guess) GuessExists(db *gorm.DB, key string) error {
+	var currentGuess Guess
+	result := db.Table("guess").Select("total").Where("user_msisdn = ? and match_id = ?", g.UserMsisdn, g.MatchID).Scan(&currentGuess)
 	if !result.RecordNotFound() {
-		return fmt.Errorf("You have already guessed on match %q", g.MatchID)
+		message := fmt.Sprintf("Du har allerede gættet på %d tilskuere til kampen: %q.", currentGuess.Total, g.MatchID)
+		sendMtsms(message, key, g.UserMsisdn)
+		return fmt.Errorf("User %d has already guessed on match %q", g.UserMsisdn, g.MatchID)
 	}
 	return nil
 }

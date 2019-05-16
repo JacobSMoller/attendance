@@ -6,24 +6,20 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/JacobSMoller/attendance/sms"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
 
-func handleSms(w http.ResponseWriter, r *http.Request) {
-	//conect to db
-	db, err := gorm.Open(
-		"postgres",
-		"host=localhost port=5432 user=postgres dbname=attendance password=docker sslmode=disable"
-	)
-	defer db.Close()
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
+// Env contains server setup.
+type Env struct {
+	DB    *gorm.DB
+	GwKey string
+}
 
+func (env *Env) handleSms(w http.ResponseWriter, r *http.Request) {
 	// Read body
 	b, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
@@ -45,18 +41,17 @@ func handleSms(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	err = guess.GuessExists(db)
+	err = guess.GuessExists(env.DB, env.GwKey)
 	if err != nil {
 		fmt.Println(err.Error())
-		http.Error(w, err.Error(), 400)
 		return
 	}
-	result := db.Table("guess").Create(&guess)
+	result := env.DB.Table("guess").Create(&guess)
 	if result.Error != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	guess.RespondToGuess()
+	guess.RespondToGuess(env.GwKey)
 	output, err := json.Marshal(guess)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -67,7 +62,24 @@ func handleSms(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/receive", handleSms)
+	//conect to db
+	db, err := gorm.Open(
+		"postgres",
+		"host=localhost port=5432 user=postgres dbname=attendance password=docker sslmode=disable",
+	)
+	defer db.Close()
+	if err != nil {
+		panic(err.Error())
+	}
+	gwKey := os.Getenv("GWKEY")
+	if gwKey == "" {
+		panic("GWKEY env variable not found.")
+	}
+	env := &Env{
+		DB:    db,
+		GwKey: gwKey,
+	}
+	http.HandleFunc("/receive", env.handleSms)
 	//Connect to database
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
