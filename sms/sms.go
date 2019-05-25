@@ -19,9 +19,7 @@ type Sms struct {
 
 func (s Sms) GuessFromSms() (guess.Guess, error) {
 	split := strings.Split(s.Message, " ")
-	matchID := split[1]
-	// TODO verify that match id is valid.
-	attendanceStr := split[2]
+	attendanceStr := split[1]
 	attendance, err := strconv.ParseInt(attendanceStr, 10, 64)
 	if err != nil {
 		return guess.Guess{}, err
@@ -29,7 +27,6 @@ func (s Sms) GuessFromSms() (guess.Guess, error) {
 	guess := guess.Guess{
 		UserMsisdn: s.Msisdn,
 		Total:      attendance,
-		MatchID:    matchID,
 	}
 	return guess, nil
 }

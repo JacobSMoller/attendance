@@ -13,7 +13,7 @@ import (
 type Guess struct {
 	Total      int64  `gorm:"total"`
 	UserMsisdn int64  `gorm:"user_msisdn"`
-	MatchID    string `gorm:"match_id"`
+	MatchID    uint32 `gorm:"match_id"`
 }
 
 type mtsms struct {
@@ -22,7 +22,8 @@ type mtsms struct {
 	Recipients []map[string]int64 `json:"recipients"`
 }
 
-func sendMtsms(message, key string, msisdn int64) error {
+// SendMtsms sends a sms message to given number.
+func SendMtsms(message, key string, msisdn int64) error {
 	sms := mtsms{
 		Message: message,
 		Sender:  "Attendance",
@@ -53,9 +54,9 @@ func sendMtsms(message, key string, msisdn int64) error {
 }
 
 // RespondToGuess sends a response to the msisdn of the guess, stating that guess is received.
-func (g Guess) RespondToGuess(key string) error {
-	message := fmt.Sprintf("Dit gæt på %d til kampen: %s er registreret.", g.Total, g.MatchID)
-	err := sendMtsms(message, key, g.UserMsisdn)
+func (g Guess) RespondToGuess(key, homeTeam, awayTeam string) error {
+	message := fmt.Sprintf("Dit gæt på %d til dagens kamp mellem %s og %s er registreret.", g.Total, homeTeam, awayTeam)
+	err := SendMtsms(message, key, g.UserMsisdn)
 	if err != nil {
 		return err
 	}
@@ -68,7 +69,7 @@ func (g Guess) GuessExists(db *gorm.DB, key string) error {
 	result := db.Table("guess").Select("total").Where("user_msisdn = ? and match_id = ?", g.UserMsisdn, g.MatchID).Scan(&currentGuess)
 	if !result.RecordNotFound() {
 		message := fmt.Sprintf("Du har allerede gættet på %d tilskuere til kampen: %q.", currentGuess.Total, g.MatchID)
-		sendMtsms(message, key, g.UserMsisdn)
+		SendMtsms(message, key, g.UserMsisdn)
 		return fmt.Errorf("User %d has already guessed on match %q", g.UserMsisdn, g.MatchID)
 	}
 	return nil

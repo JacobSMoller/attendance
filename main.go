@@ -8,18 +8,20 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/JacobSMoller/attendance/guess"
+	"github.com/JacobSMoller/attendance/match"
 	"github.com/JacobSMoller/attendance/sms"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
 
 // Env contains server setup.
-type Env struct {
+type Service struct {
 	DB    *gorm.DB
 	GwKey string
 }
 
-func (env *Env) handleSms(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleSms(w http.ResponseWriter, r *http.Request) {
 	// Read body
 	b, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
@@ -36,23 +38,33 @@ func (env *Env) handleSms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	guess, err := sms.GuessFromSms()
+	newGuess, err := sms.GuessFromSms()
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	err = guess.GuessExists(env.DB, env.GwKey)
+
+	// Get todays match.
+	match, err := match.TodaysMatch(s.DB)
+	if err != nil {
+		fmt.Println(err.Error())
+		guess.SendMtsms("No match today", s.GwKey, newGuess.UserMsisdn)
+		return
+	}
+	newGuess.MatchID = match.ID
+
+	err = newGuess.GuessExists(s.DB, s.GwKey)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
-	result := env.DB.Table("guess").Create(&guess)
+	result := s.DB.Table("guess").Create(&newGuess)
 	if result.Error != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	guess.RespondToGuess(env.GwKey)
-	output, err := json.Marshal(guess)
+	newGuess.RespondToGuess(s.GwKey, match.HomeTeam, match.AwayTeam)
+	output, err := json.Marshal(newGuess)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -67,6 +79,7 @@ func main() {
 		"postgres",
 		"host=localhost port=5432 user=postgres dbname=attendance password=docker sslmode=disable",
 	)
+	db.LogMode(true)
 	defer db.Close()
 	if err != nil {
 		panic(err.Error())
@@ -75,7 +88,7 @@ func main() {
 	if gwKey == "" {
 		panic("GWKEY env variable not found.")
 	}
-	env := &Env{
+	env := &Service{
 		DB:    db,
 		GwKey: gwKey,
 	}
