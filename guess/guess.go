@@ -68,9 +68,9 @@ func (g Guess) GuessExists(db *gorm.DB, key string) error {
 	var currentGuess Guess
 	result := db.Table("guess").Select("total").Where("user_msisdn = ? and match_id = ?", g.UserMsisdn, g.MatchID).Scan(&currentGuess)
 	if !result.RecordNotFound() {
-		message := fmt.Sprintf("Du har allerede gættet på %d tilskuere til kampen: %q.", currentGuess.Total, g.MatchID)
+		message := fmt.Sprintf("Du har allerede gættet på %d tilskuere til dagens kamp.", currentGuess.Total)
 		SendMtsms(message, key, g.UserMsisdn)
-		return fmt.Errorf("User %d has already guessed on match %q", g.UserMsisdn, g.MatchID)
+		return fmt.Errorf("User %d has already guessed on match %d", g.UserMsisdn, g.MatchID)
 	}
 	return nil
 }
