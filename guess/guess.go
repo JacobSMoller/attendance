@@ -38,6 +38,9 @@ func SendMtsms(message, key string, msisdn int64) error {
 		return err
 	}
 	req, err := http.NewRequest("POST", "https://gatewayapi.com/rest/mtsms", bytes.NewBuffer(jsonSms))
+	if err != nil {
+		return err
+	}
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(key, "")
 	client := &http.Client{}
@@ -69,7 +72,10 @@ func (g Guess) GuessExists(db *gorm.DB, key string) error {
 	result := db.Table("guess").Select("total").Where("user_msisdn = ? and match_id = ?", g.UserMsisdn, g.MatchID).Scan(&currentGuess)
 	if !result.RecordNotFound() {
 		message := fmt.Sprintf("Du har allerede gættet på %d tilskuere til dagens kamp.", currentGuess.Total)
-		SendMtsms(message, key, g.UserMsisdn)
+		err := SendMtsms(message, key, g.UserMsisdn)
+		if err != nil {
+			return err
+		}
 		return fmt.Errorf("User %d has already guessed on match %d", g.UserMsisdn, g.MatchID)
 	}
 	return nil

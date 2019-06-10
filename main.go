@@ -34,7 +34,7 @@ func (s *Service) handleSms(w http.ResponseWriter, r *http.Request) {
 		// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
 		return []byte(s.AuthToken), nil
 	})
-	if err != nil || token.Valid == false {
+	if err != nil || !token.Valid {
 		fmt.Println("Could not verify gwapi signature for request")
 		return
 	}
@@ -65,7 +65,11 @@ func (s *Service) handleSms(w http.ResponseWriter, r *http.Request) {
 	match, err := match.TodaysMatch(s.DB)
 	if err != nil {
 		fmt.Println(err.Error())
-		guess.SendMtsms("No match today", s.GwKey, newGuess.UserMsisdn)
+		err = guess.SendMtsms("No match today", s.GwKey, newGuess.UserMsisdn)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
 		return
 	}
 	newGuess.MatchID = match.ID
@@ -77,17 +81,25 @@ func (s *Service) handleSms(w http.ResponseWriter, r *http.Request) {
 	}
 	result := s.DB.Table("guess").Create(&newGuess)
 	if result.Error != nil {
+		http.Error(w, result.Error.Error(), 500)
+		return
+	}
+	err = newGuess.RespondToGuess(s.GwKey, match.HomeTeam, match.AwayTeam)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	newGuess.RespondToGuess(s.GwKey, match.HomeTeam, match.AwayTeam)
 	output, err := json.Marshal(newGuess)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	w.Header().Set("content-type", "application/json")
-	w.Write(output)
+	_, err = w.Write(output)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 }
 
 func main() {
