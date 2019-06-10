@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/JacobSMoller/attendance/guess"
 	"github.com/JacobSMoller/attendance/match"
@@ -14,16 +13,23 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
+	"github.com/kelseyhightower/envconfig"
 )
 
-// Env contains server setup.
-type Service struct {
+// Config contains variables for configuring the services parsed from env.
+type Config struct {
 	DB        *gorm.DB
-	GwKey     string
-	AuthToken string
+	GwKey     string `required:"true" split_words:"true"`
+	AuthToken string `required:"true" split_words:"true"`
+	DbHost    string `required:"true" split_words:"true"`
+	DbName    string `required:"true" split_words:"true"`
+	DbUser    string `required:"true" split_words:"true"`
+	DbPw      string `required:"true" split_words:"true"`
 }
 
-func (s *Service) handleSms(w http.ResponseWriter, r *http.Request) {
+var cfg Config
+
+func handleSms(w http.ResponseWriter, r *http.Request) {
 	gwJwt := r.Header.Get("X-Gwapi-Signature")
 	token, err := jwt.Parse(gwJwt, func(token *jwt.Token) (interface{}, error) {
 		// Don't forget to validate the alg is what you expect:
@@ -32,7 +38,7 @@ func (s *Service) handleSms(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
-		return []byte(s.AuthToken), nil
+		return []byte(cfg.AuthToken), nil
 	})
 	if err != nil || !token.Valid {
 		fmt.Println("Could not verify gwapi signature for request")
@@ -62,10 +68,10 @@ func (s *Service) handleSms(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get todays match.
-	match, err := match.TodaysMatch(s.DB)
+	match, err := match.TodaysMatch(cfg.DB)
 	if err != nil {
 		fmt.Println(err.Error())
-		err = guess.SendMtsms("No match today", s.GwKey, newGuess.UserMsisdn)
+		err = guess.SendMtsms("No match today", cfg.GwKey, newGuess.UserMsisdn)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -74,17 +80,17 @@ func (s *Service) handleSms(w http.ResponseWriter, r *http.Request) {
 	}
 	newGuess.MatchID = match.ID
 
-	err = newGuess.GuessExists(s.DB, s.GwKey)
+	err = newGuess.GuessExists(cfg.DB, cfg.GwKey)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
-	result := s.DB.Table("guess").Create(&newGuess)
+	result := cfg.DB.Table("guess").Create(&newGuess)
 	if result.Error != nil {
 		http.Error(w, result.Error.Error(), 500)
 		return
 	}
-	err = newGuess.RespondToGuess(s.GwKey, match.HomeTeam, match.AwayTeam)
+	err = newGuess.RespondToGuess(cfg.GwKey, match.HomeTeam, match.AwayTeam)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -103,30 +109,24 @@ func (s *Service) handleSms(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	err := envconfig.Process("attendance", &cfg)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	dbConnectString := fmt.Sprintf("host=%s port=5432 user=%s dbname=%s password=%s sslmode=disable",
+		cfg.DbHost, cfg.DbUser, cfg.DbName, cfg.DbPw)
 	//conect to db
 	db, err := gorm.Open(
 		"postgres",
-		"host=localhost port=5432 user=postgres dbname=attendance password=docker sslmode=disable",
+		dbConnectString,
 	)
 	db.LogMode(true)
 	defer db.Close()
 	if err != nil {
 		panic(err.Error())
 	}
-	gwKey := os.Getenv("GWKEY")
-	if gwKey == "" {
-		panic("GWKEY env variable not found.")
-	}
-	gwAuth := os.Getenv("GWAUTH")
-	if gwAuth == "" {
-		panic("GWAUTH env variable not found.")
-	}
-	env := &Service{
-		DB:        db,
-		GwKey:     gwKey,
-		AuthToken: gwAuth,
-	}
-	http.HandleFunc("/receive", env.handleSms)
-	//Connect to database
+	cfg.DB = db
+	http.HandleFunc("/receive", handleSms)
+	//Serve on port
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

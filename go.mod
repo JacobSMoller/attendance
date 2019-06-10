@@ -8,6 +8,7 @@ require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/google/go-cmp v0.3.0 // indirect
 	github.com/jinzhu/gorm v1.9.8
+	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/lib/pq v1.1.1 // indirect
 	golang.org/x/crypto v0.0.0-20190513172903-22d7a77e9e5f // indirect
 	google.golang.org/appengine v1.6.0 // indirect
