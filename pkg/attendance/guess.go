@@ -1,4 +1,4 @@
-package guess
+package api
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 )
 
 // Guess contains fields and info on a guess, including info to the ORM on how to store a guess in the database.
-type Guess struct {
+type guess struct {
 	Total      int64  `gorm:"total"`
 	UserMsisdn int64  `gorm:"user_msisdn"`
 	MatchID    uint32 `gorm:"match_id"`
@@ -57,7 +57,7 @@ func SendMtsms(message, key string, msisdn int64) error {
 }
 
 // RespondToGuess sends a response to the msisdn of the guess, stating that guess is received.
-func (g Guess) RespondToGuess(key, homeTeam, awayTeam string) error {
+func (g guess) RespondToGuess(key, homeTeam, awayTeam string) error {
 	message := fmt.Sprintf("Dit gæt på %d til dagens kamp mellem %s og %s er registreret.", g.Total, homeTeam, awayTeam)
 	err := SendMtsms(message, key, g.UserMsisdn)
 	if err != nil {
@@ -67,8 +67,8 @@ func (g Guess) RespondToGuess(key, homeTeam, awayTeam string) error {
 }
 
 // GuessExists check if a guess already exists for match and user.
-func (g Guess) GuessExists(db *gorm.DB, key string) error {
-	var currentGuess Guess
+func (g guess) GuessExists(db *gorm.DB, key string) error {
+	var currentGuess guess
 	result := db.Table("guess").Select("total").Where("user_msisdn = ? and match_id = ?", g.UserMsisdn, g.MatchID).Scan(&currentGuess)
 	if !result.RecordNotFound() {
 		message := fmt.Sprintf("Du har allerede gættet på %d tilskuere til dagens kamp.", currentGuess.Total)

@@ -16,7 +16,7 @@ RUN go mod download
 COPY . .
 
 # Build static binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o attendance -ldflags '-w -s' main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o attendance -ldflags '-w -s' cmd/serve.go
 
 # Run Golang CI Lint, with a whole suite of linters and code quality checks
 RUN golangci-lint-$GOLANGCI_VERSION-linux-amd64/golangci-lint run
