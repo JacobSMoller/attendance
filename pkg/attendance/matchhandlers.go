@@ -23,8 +23,12 @@ func (s *Service) GetMatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(match)
-	return
+	err = json.NewEncoder(w).Encode(match)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 }
 
 // CreateMatch used to handle /match/create
@@ -48,7 +52,6 @@ func (s *Service) CreateMatch(w http.ResponseWriter, r *http.Request) {
 	if result.Error != nil {
 		fmt.Println("failed to create match")
 	}
-	return
 }
 
 // UpdateMatch used to handle /match/update
@@ -71,13 +74,11 @@ func (s *Service) UpdateMatch(w http.ResponseWriter, r *http.Request) {
 	if result.Error != nil {
 		fmt.Println("failed to create match")
 	}
-	message := fmt.Sprintf("Match done todays attendance: %d", *match.Spectators)
-	SendMtsms(message, s.GwKey, 4528725485)
+	// message := fmt.Sprintf("Match done todays attendance: %d", *match.Spectators)
 	// TODO SEND SMS REPORT.
 	// var guesses []Guess
 	// result = db.Table("guess").Select("*").Where("match_id = ?", match.ID).Scan(&guesses)
 	// if result.Error != nil {
 	// 	fmt.Printf("Could not retrieve guesses")
 	// }
-	return
 }
